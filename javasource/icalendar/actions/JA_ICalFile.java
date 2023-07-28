@@ -14,11 +14,13 @@ import java.io.InputStream;
 import java.net.URI;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
+import java.text.SimpleDateFormat;
+import java.time.Instant;
+import java.util.Date;
 import java.util.TimeZone;
 import com.mendix.core.Core;
 import com.mendix.systemwideinterfaces.core.IContext;
 import com.mendix.webui.CustomJavaAction;
-import net.fortuna.ical4j.data.CalendarBuilder;
 import net.fortuna.ical4j.model.Calendar;
 import net.fortuna.ical4j.model.DateTime;
 import net.fortuna.ical4j.model.Property;
@@ -39,8 +41,6 @@ import net.fortuna.ical4j.model.property.Organizer;
 import net.fortuna.ical4j.model.property.ProdId;
 import net.fortuna.ical4j.model.property.Uid;
 import net.fortuna.ical4j.model.property.Version;
-import net.fortuna.ical4j.util.Calendars;
-import net.fortuna.ical4j.validate.Validator;
 import com.mendix.systemwideinterfaces.core.IMendixObject;
 
 public class JA_ICalFile extends CustomJavaAction<java.lang.Boolean>
@@ -102,8 +102,8 @@ public class JA_ICalFile extends CustomJavaAction<java.lang.Boolean>
 		calendar.getComponents().add(vt);
 		
 		// Convert the dates
-	    DateTime start 	= new DateTime(this.StartDateTime), 
-	    		 end 	= new DateTime(this.EndDateTime);
+	    DateTime start 	= convertToUtcDateTime(this.StartDateTime), 
+	    		 end 	= convertToUtcDateTime(this.EndDateTime);
 	    
 	    // Create the event component.
 	    VEvent event = new VEvent(start, end, this.Subject);
@@ -159,6 +159,22 @@ public class JA_ICalFile extends CustomJavaAction<java.lang.Boolean>
         }
 
         return java.util.Arrays.stream(recipients.split("[,;]")).map(String::trim);
+    }
+    
+    public static DateTime convertToUtcDateTime(java.util.Date date) throws Exception {
+    	// First we convert to an instant which is in UTC
+        Instant instant = date.toInstant();
+        
+        // Then convert it to a string
+        String dateTimeString = instant.toString();
+        
+        // Then parse a new date from the string
+        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'");
+        Date newDate = sdf.parse(dateTimeString);
+        
+        // Now that the new date is in UTC we can parse it to a DateTime
+        DateTime utcDateTime = new DateTime(newDate);
+        return utcDateTime;
     }
 	// END EXTRA CODE
 }
