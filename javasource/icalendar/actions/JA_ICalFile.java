@@ -11,36 +11,17 @@ package icalendar.actions;
 
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
-import java.net.URI;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
 import java.time.Instant;
+import java.time.format.DateTimeFormatter;
 import java.util.Date;
 import java.util.TimeZone;
 import com.mendix.core.Core;
+import com.mendix.logging.ILogNode;
 import com.mendix.systemwideinterfaces.core.IContext;
 import com.mendix.webui.CustomJavaAction;
-import net.fortuna.ical4j.model.Calendar;
-import net.fortuna.ical4j.model.DateTime;
-import net.fortuna.ical4j.model.Property;
-import net.fortuna.ical4j.model.TimeZoneRegistry;
-import net.fortuna.ical4j.model.TimeZoneRegistryFactory;
-import net.fortuna.ical4j.model.component.VEvent;
-import net.fortuna.ical4j.model.component.VTimeZone;
-import net.fortuna.ical4j.model.parameter.PartStat;
-import net.fortuna.ical4j.model.parameter.Role;
-import net.fortuna.ical4j.model.parameter.Rsvp;
-import net.fortuna.ical4j.model.property.Attendee;
-import net.fortuna.ical4j.model.property.CalScale;
-import net.fortuna.ical4j.model.property.Description;
-import net.fortuna.ical4j.model.property.Method;
-import net.fortuna.ical4j.model.property.Location;
-import net.fortuna.ical4j.model.property.Sequence;
-import net.fortuna.ical4j.model.property.Organizer;
-import net.fortuna.ical4j.model.property.ProdId;
-import net.fortuna.ical4j.model.property.Uid;
-import net.fortuna.ical4j.model.property.Version;
 import com.mendix.systemwideinterfaces.core.IMendixObject;
 
 public class JA_ICalFile extends CustomJavaAction<java.lang.Boolean>
@@ -49,6 +30,7 @@ public class JA_ICalFile extends CustomJavaAction<java.lang.Boolean>
 	private java.lang.Long Sequence;
 	private java.util.Date StartDateTime;
 	private java.util.Date EndDateTime;
+	private java.lang.String TimeZoneCode;
 	private java.lang.String Subject;
 	private java.lang.String BodyText;
 	private java.lang.String Location;
@@ -58,13 +40,14 @@ public class JA_ICalFile extends CustomJavaAction<java.lang.Boolean>
 	private IMendixObject __IcalFile;
 	private system.proxies.FileDocument IcalFile;
 
-	public JA_ICalFile(IContext context, java.lang.String UID, java.lang.Long Sequence, java.util.Date StartDateTime, java.util.Date EndDateTime, java.lang.String Subject, java.lang.String BodyText, java.lang.String Location, java.lang.String OrganizerEmail, java.lang.String AttendeeEmails, java.lang.Boolean Cancel, IMendixObject IcalFile)
+	public JA_ICalFile(IContext context, java.lang.String UID, java.lang.Long Sequence, java.util.Date StartDateTime, java.util.Date EndDateTime, java.lang.String TimeZoneCode, java.lang.String Subject, java.lang.String BodyText, java.lang.String Location, java.lang.String OrganizerEmail, java.lang.String AttendeeEmails, java.lang.Boolean Cancel, IMendixObject IcalFile)
 	{
 		super(context);
 		this.UID = UID;
 		this.Sequence = Sequence;
 		this.StartDateTime = StartDateTime;
 		this.EndDateTime = EndDateTime;
+		this.TimeZoneCode = TimeZoneCode;
 		this.Subject = Subject;
 		this.BodyText = BodyText;
 		this.Location = Location;
@@ -84,61 +67,48 @@ public class JA_ICalFile extends CustomJavaAction<java.lang.Boolean>
             return false;
         }
 		
-		// Create a new calendar
-	    Calendar calendar = new Calendar();
-
-	    // Set the calendar properties
-	    calendar.getProperties().add(Version.VERSION_2_0);
-	    calendar.getProperties().add(new ProdId("-//Mendix//iCal4j"));
-	    calendar.getProperties().add(this.Cancel ? Method.CANCEL : Method.REQUEST);
-	    calendar.getProperties().add(CalScale.GREGORIAN);
-
-	    // Create a timezone
-	    TimeZoneRegistry registry = TimeZoneRegistryFactory.getInstance().createRegistry();
-	    TimeZone timezone = registry.getTimeZone(TimeZone.getDefault().getID());
-	    VTimeZone vt = ((net.fortuna.ical4j.model.TimeZone) timezone).getVTimeZone();
-	    
-	    // Add the timezone to the calendar
-		calendar.getComponents().add(vt);
-		
 		// Convert the dates
-	    DateTime start 	= convertToUtcDateTime(this.StartDateTime), 
-	    		 end 	= convertToUtcDateTime(this.EndDateTime);
+	    Date 	start 	= convertToUtcDateTime(StartDateTime.toInstant(), TimeZoneCode), 
+	    		end 	= convertToUtcDateTime(EndDateTime.toInstant(), TimeZoneCode);
 	    
-	    // Create the event component.
-	    VEvent event = new VEvent(start, end, this.Subject);
+	    String method = this.Cancel ? "CANCEL" : "PUBLISH";
+		
+	    SimpleDateFormat dateFormat = new SimpleDateFormat("yyyyMMdd'T'HHmmss'Z'");
 
-	    Property 
-	    		organizer 	= new Organizer(URI.create("mailto:" + this.OrganizerEmail)), 
-	    		description = new Description(this.BodyText), 
-	    		uid 		= new Uid(this.UID), 
-	    		location 	= new Location(this.Location), 
-	    		sequence 	= new Sequence((this.Sequence.toString())
-	    );
-
-	    event.getProperties().add(sequence);
-	    event.getProperties().add(organizer);
-	    event.getProperties().add(uid);
-	    event.getProperties().add(location);
-	    event.getProperties().add(description);
-
+	    StringBuilder icalBuilder = new StringBuilder();
+	    icalBuilder.append("BEGIN:VCALENDAR\n");
+	    icalBuilder.append("VERSION:2.0\n");
+	    icalBuilder.append("PRODID:-//Mendix//iCal4j\n");
+	    icalBuilder.append("METHOD:" + method + "\n");
+	    icalBuilder.append("CALSCALE:GREGORIAN\n");
+	    icalBuilder.append("BEGIN:VEVENT\n");
+	    icalBuilder.append("DTSTAMP:" + dateFormat.format(new Date()) + "\n");
+	    icalBuilder.append("DTSTART:" + dateFormat.format(start) + "\n");
+	    icalBuilder.append("DTEND:" + dateFormat.format(end) + "\n");
+	    icalBuilder.append("SUMMARY:" + Subject + "\n");
+	    icalBuilder.append("SEQUENCE:" + Sequence + "\n");
+	    icalBuilder.append("ORGANIZER:mailto:" + OrganizerEmail + "\n");
+	    
         getAttendees(this.AttendeeEmails).forEach(mail -> {
-            Attendee attendee = new Attendee(URI.create("mailto:" + mail));
-            attendee.getParameters().add(Role.REQ_PARTICIPANT);
-            attendee.getParameters().add(PartStat.NEEDS_ACTION);
-            attendee.getParameters().add(Rsvp.TRUE);
-            event.getProperties().add(attendee);
+        	icalBuilder.append("ATTENDEE;ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:mailto:" + mail + "\n");
         });
 	    
-	    // Add the event to the calendar
-		calendar.getComponents().add(event);
-		    
-        Charset charset = StandardCharsets.UTF_8;
-        try (InputStream inputStream = new ByteArrayInputStream(calendar.toString().getBytes(charset))) {
-            Core.storeFileDocumentContent(getContext(), this.IcalFile.getMendixObject(), inputStream);
+	    icalBuilder.append("UID:" + UID + "\n");
+	    icalBuilder.append("LOCATION:" + Location + "\n");
+	    icalBuilder.append("DESCRIPTION:" + BodyText + "\n");
+	    icalBuilder.append("END:VEVENT\n");
+	    icalBuilder.append("END:VCALENDAR\n");
+	    
+		Charset charset = StandardCharsets.UTF_8;
+        byte[] byteArray = icalBuilder.toString().getBytes(charset);
+        try (InputStream is = new ByteArrayInputStream(byteArray)) {
+            // Your code to store the InputStream content
+            Core.storeFileDocumentContent(getContext(), this.__IcalFile, is);
+            this.IcalFile.setName(getContext(), "event.ics");
+        } catch (Exception e) {
+        	LOG.error(e);
         }
-        this.IcalFile.setName(getContext(), "event.ics");
-        return true;
+		return true;
 		// END USER CODE
 	}
 
@@ -161,20 +131,46 @@ public class JA_ICalFile extends CustomJavaAction<java.lang.Boolean>
         return java.util.Arrays.stream(recipients.split("[,;]")).map(String::trim);
     }
     
-    public static DateTime convertToUtcDateTime(java.util.Date date) throws Exception {
-    	// First we convert to an instant which is in UTC
-        Instant instant = date.toInstant();
+    public static Date convertToUtcDateTime(Instant date, String timeZoneId) throws Exception {
+    	// First we have to know to what timezone we want to convert the time to
+    	TimeZone timeZone = null;
+    	
+    	if (timeZoneId != null) {
+    		timeZone = TimeZone.getTimeZone(timeZoneId);
+    	} else {
+        	// Get the default time zone offset of the system
+    		timeZone = TimeZone.getDefault();
+    	}
         
-        // Then convert it to a string
-        String dateTimeString = instant.toString();
+    	// Then remove the offset from the date we end up with the correct UTC time
+        long dateTimeMillis = date.toEpochMilli();
+        int totalOffsetMillis = timeZone.getOffset(dateTimeMillis);
         
-        // Then parse a new date from the string
-        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'");
-        Date newDate = sdf.parse(dateTimeString);
+        Instant dateMinus = date.minusMillis(totalOffsetMillis);
+        date = dateMinus;
         
-        // Now that the new date is in UTC we can parse it to a DateTime
-        DateTime utcDateTime = new DateTime(newDate);
-        return utcDateTime;
+        // Then to remove the timezone data from the date so that it get parse properly we convert to a formatted String, Example: "2023-08-03T14:00:00Z"
+        DateTimeFormatter formatter = DateTimeFormatter.ISO_INSTANT;
+        String formattedString  = formatter.format(date);
+        LOG.info("formattedString " + formattedString);
+        
+        // Parse it back to a date
+    	Date newDate = null;
+        if (formattedString.length() == 20) {
+            SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'");
+            newDate = sdf.parse(formattedString);
+        } else {
+            SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'");
+            newDate = sdf.parse(formattedString);
+        }
+        return newDate;
     }
+    
+    public static Date applyTimeZone(Date dateTime, String timeZoneId) {
+        Date tempDate = dateTime;
+		return tempDate;
+    }
+    
+    public static ILogNode LOG = Core.getLogger("iCalendar");
 	// END EXTRA CODE
 }
