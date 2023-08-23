@@ -5,7 +5,7 @@ An easy way to generate appointment (ics) files to attach to an email.
 ## Features
 
 - Generate Create/Update/Delete ics appointment files
-- Add desired extra input to the appointment like location, organizer, etc.
+- Add desired extra input to the appointment like location, description, etc.
 - Optionally set a TimeZone
 
 ## Dependencies
@@ -14,9 +14,13 @@ An easy way to generate appointment (ics) files to attach to an email.
 
 ## Usage
 
-Simply add the `SUB_IcalMessage_CreateFile` microflow to wherever you wish to generate an ics file. It simply needs an `IcalMessage` object. Only the start/end time and subject are mandatory, but it's recommended to populate all fields. The `Attendee Emails` parameter can contain multiple e-mail addresses separated by a comma or semicolon.
+Simply add the `SUB_IcalMessage_CreateFile` microflow to wherever you wish to generate an ics file. It simply needs an `IcalMessage` object. Only the start/end time and subject are mandatory, but it's recommended to populate all fields. The `AttendeesList` parameter required a list of `Attendee` objects. Be careful not to rename this entity.
 
 If you wish to test the ics files, you can add the `SNIP_ICalendar` to a page.
+
+## Email headers
+
+In order to correctly send a ICS file via an Email you need to set the correct attachment header. If you are using the Email Connector module you should use their Attachment mechanism to add the ICS file to an email. You can then use the `attachmentContentType` attribute from the `Attachment` entity in the Email Connector module to set the correct header. The value should be something like this `text/calendar; charset=utf-8; method=REQUEST; name=event.ics`. Notice here that you have to set the correct method to the same value that the ical status has.
 
 ## Sending an update for an appointment
 Updated on the same appointment should have the same UID so that the system understands its about the same event. It is also recommended to update the sequence number if you want to send an update about an existing appointment you have already sent earlier. For example, when you cancel an already sent appointment later on (the first mail will have an ics file with sequence 0, and the next one should have a 1). In that case, it is wise to commit the `IcalMessage` object after sending it the first time and then retrieving it when sending an update. In the `SUB_IcalMessage_CreateFile`, it will already have updated the sequence number.
