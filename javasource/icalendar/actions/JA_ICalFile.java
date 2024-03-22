@@ -18,7 +18,6 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.Date;
-import java.util.TimeZone;
 import com.mendix.core.Core;
 import com.mendix.logging.ILogNode;
 import com.mendix.systemwideinterfaces.core.IContext;
@@ -28,51 +27,68 @@ import icalendar.proxies.Attendee;
 
 public class JA_ICalFile extends CustomJavaAction<java.lang.Boolean>
 {
-	private java.lang.String UID;
-	private java.lang.Long Sequence;
-	private icalendar.proxies.ENUM_ICalStatus Status;
-	private java.util.Date StartDateTime;
-	private java.util.Date EndDateTime;
-	private java.lang.String TimeZoneCode;
-	private java.lang.String Subject;
-	private java.lang.String BodyText;
-	private java.lang.String Location;
-	private java.lang.String OrganizerName;
-	private java.lang.String OrganizerEmail;
-	private java.util.List<IMendixObject> __AttendeeList;
-	private java.util.List<icalendar.proxies.Attendee> AttendeeList;
-	private IMendixObject __IcalFile;
-	private system.proxies.FileDocument IcalFile;
+	private final java.lang.String UID;
+	private final java.lang.Long Sequence;
+	private final icalendar.proxies.ENUM_ICalStatus Status;
+	private final java.util.Date StartDateTime;
+	private final java.util.Date EndDateTime;
+	private final java.lang.String TimeZoneCode;
+	private final java.lang.String Subject;
+	private final java.lang.String BodyText;
+	private final java.lang.String Location;
+	private final java.lang.String OrganizerName;
+	private final java.lang.String OrganizerEmail;
+	/** @deprecated use com.mendix.utils.ListUtils.map(AttendeeList, com.mendix.systemwideinterfaces.core.IEntityProxy::getMendixObject) instead. */
+	@java.lang.Deprecated(forRemoval = true)
+	private final java.util.List<IMendixObject> __AttendeeList;
+	private final java.util.List<icalendar.proxies.Attendee> AttendeeList;
+	/** @deprecated use IcalFile.getMendixObject() instead. */
+	@java.lang.Deprecated(forRemoval = true)
+	private final IMendixObject __IcalFile;
+	private final system.proxies.FileDocument IcalFile;
 
-	public JA_ICalFile(IContext context, java.lang.String UID, java.lang.Long Sequence, java.lang.String Status, java.util.Date StartDateTime, java.util.Date EndDateTime, java.lang.String TimeZoneCode, java.lang.String Subject, java.lang.String BodyText, java.lang.String Location, java.lang.String OrganizerName, java.lang.String OrganizerEmail, java.util.List<IMendixObject> AttendeeList, IMendixObject IcalFile)
+	public JA_ICalFile(
+		IContext context,
+		java.lang.String _uID,
+		java.lang.Long _sequence,
+		java.lang.String _status,
+		java.util.Date _startDateTime,
+		java.util.Date _endDateTime,
+		java.lang.String _timeZoneCode,
+		java.lang.String _subject,
+		java.lang.String _bodyText,
+		java.lang.String _location,
+		java.lang.String _organizerName,
+		java.lang.String _organizerEmail,
+		java.util.List<IMendixObject> _attendeeList,
+		IMendixObject _icalFile
+	)
 	{
 		super(context);
-		this.UID = UID;
-		this.Sequence = Sequence;
-		this.Status = Status == null ? null : icalendar.proxies.ENUM_ICalStatus.valueOf(Status);
-		this.StartDateTime = StartDateTime;
-		this.EndDateTime = EndDateTime;
-		this.TimeZoneCode = TimeZoneCode;
-		this.Subject = Subject;
-		this.BodyText = BodyText;
-		this.Location = Location;
-		this.OrganizerName = OrganizerName;
-		this.OrganizerEmail = OrganizerEmail;
-		this.__AttendeeList = AttendeeList;
-		this.__IcalFile = IcalFile;
+		this.UID = _uID;
+		this.Sequence = _sequence;
+		this.Status = _status == null ? null : icalendar.proxies.ENUM_ICalStatus.valueOf(_status);
+		this.StartDateTime = _startDateTime;
+		this.EndDateTime = _endDateTime;
+		this.TimeZoneCode = _timeZoneCode;
+		this.Subject = _subject;
+		this.BodyText = _bodyText;
+		this.Location = _location;
+		this.OrganizerName = _organizerName;
+		this.OrganizerEmail = _organizerEmail;
+		this.__AttendeeList = _attendeeList;
+		this.AttendeeList = java.util.Optional.ofNullable(_attendeeList)
+			.orElse(java.util.Collections.emptyList())
+			.stream()
+			.map(attendeeListElement -> icalendar.proxies.Attendee.initialize(getContext(), attendeeListElement))
+			.collect(java.util.stream.Collectors.toList());
+		this.__IcalFile = _icalFile;
+		this.IcalFile = _icalFile == null ? null : system.proxies.FileDocument.initialize(getContext(), _icalFile);
 	}
 
 	@java.lang.Override
 	public java.lang.Boolean executeAction() throws Exception
 	{
-		this.AttendeeList = java.util.Optional.ofNullable(this.__AttendeeList)
-			.orElse(java.util.Collections.emptyList())
-			.stream()
-			.map(__AttendeeListElement -> icalendar.proxies.Attendee.initialize(getContext(), __AttendeeListElement))
-			.collect(java.util.stream.Collectors.toList());
-
-		this.IcalFile = this.__IcalFile == null ? null : system.proxies.FileDocument.initialize(getContext(), __IcalFile);
-
 		// BEGIN USER CODE
         if (IcalFile == null) {
         	LOG.error("No file provided");
@@ -84,9 +100,10 @@ public class JA_ICalFile extends CustomJavaAction<java.lang.Boolean>
         	return false;
         }
 		
-        if (TimeZoneCode == null) {
+        String localTimeZoneCode = this.TimeZoneCode;
+        if (localTimeZoneCode == null) {
             ZoneId timeZone = ZoneId.systemDefault(); // Get the system default time zone
-            TimeZoneCode = timeZone.getId();
+            localTimeZoneCode = timeZone.getId();
         }
         
 		// Convert the dates
@@ -108,8 +125,8 @@ public class JA_ICalFile extends CustomJavaAction<java.lang.Boolean>
 	    icalBuilder.append("BEGIN:VEVENT\r\n");
 	    icalBuilder.append("UID:" + UID + "\r\n");
 	    icalBuilder.append("DTSTAMP:" + dateFormatStamp.format(new Date()) + "\r\n");
-	    icalBuilder.append("DTSTART;TZID=" + TimeZoneCode + ":" + dateFormat.format(start) + "\r\n");
-	    icalBuilder.append("DTEND;TZID=" + TimeZoneCode + ":" + dateFormat.format(end) + "\r\n");
+	    icalBuilder.append("DTSTART;TZID=" + localTimeZoneCode + ":" + dateFormat.format(start) + "\r\n");
+	    icalBuilder.append("DTEND;TZID=" + localTimeZoneCode + ":" + dateFormat.format(end) + "\r\n");
 	    icalBuilder.append("SUMMARY:" + Subject + "\r\n");
 	    icalBuilder.append("SEQUENCE:" + Sequence + "\r\n");
 	    icalBuilder.append("ORGANIZER;CN=\"" + OrganizerName + "\":mailto:" + OrganizerEmail + "\r\n");
