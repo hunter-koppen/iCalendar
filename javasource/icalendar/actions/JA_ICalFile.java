@@ -11,27 +11,25 @@ package icalendar.actions;
 
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
-import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
-import java.text.SimpleDateFormat;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
-import java.util.Date;
 import com.mendix.core.Core;
 import com.mendix.logging.ILogNode;
 import com.mendix.systemwideinterfaces.core.IContext;
-import com.mendix.webui.CustomJavaAction;
 import com.mendix.systemwideinterfaces.core.IMendixObject;
 import icalendar.proxies.Attendee;
+import com.mendix.systemwideinterfaces.core.UserAction;
 
-public class JA_ICalFile extends CustomJavaAction<java.lang.Boolean>
+public class JA_ICalFile extends UserAction<java.lang.Boolean>
 {
 	private final java.lang.String UID;
 	private final java.lang.Long Sequence;
 	private final icalendar.proxies.ENUM_ICalStatus Status;
 	private final java.util.Date StartDateTime;
 	private final java.util.Date EndDateTime;
+	private final java.lang.Boolean Localized;
 	private final java.lang.String TimeZoneCode;
 	private final java.lang.String Subject;
 	private final java.lang.String BodyText;
@@ -54,6 +52,7 @@ public class JA_ICalFile extends CustomJavaAction<java.lang.Boolean>
 		java.lang.String _status,
 		java.util.Date _startDateTime,
 		java.util.Date _endDateTime,
+		java.lang.Boolean _localized,
 		java.lang.String _timeZoneCode,
 		java.lang.String _subject,
 		java.lang.String _bodyText,
@@ -70,6 +69,7 @@ public class JA_ICalFile extends CustomJavaAction<java.lang.Boolean>
 		this.Status = _status == null ? null : icalendar.proxies.ENUM_ICalStatus.valueOf(_status);
 		this.StartDateTime = _startDateTime;
 		this.EndDateTime = _endDateTime;
+		this.Localized = _localized;
 		this.TimeZoneCode = _timeZoneCode;
 		this.Subject = _subject;
 		this.BodyText = _bodyText;
@@ -91,92 +91,84 @@ public class JA_ICalFile extends CustomJavaAction<java.lang.Boolean>
 	{
 		// BEGIN USER CODE
         if (IcalFile == null) {
-        	LOG.error("No file provided");
+            LOG.error("No file provided");
             return false;
         }
-        
         if (Status == null) {
-        	LOG.error("No status set");
-        	return false;
+            LOG.error("No status set");
+            return false;
         }
-		
+        if (StartDateTime == null || EndDateTime == null) {
+            LOG.error("Start or end date/time not set");
+            return false;
+        }
+
+        // Localized == true  -> the value is a real moment in time; emit as UTC (trailing Z), no TZID.
+        // Localized == false/null -> the value is a wall-clock label; emit the digits verbatim under
+        //                            the given TZID (the original behaviour of this action).
+        boolean treatAsMoment = Boolean.TRUE.equals(Localized);
+
         String localTimeZoneCode = this.TimeZoneCode;
         if (localTimeZoneCode == null) {
-            ZoneId timeZone = ZoneId.systemDefault(); // Get the system default time zone
-            localTimeZoneCode = timeZone.getId();
+            localTimeZoneCode = ZoneId.systemDefault().getId();
         }
-        
-		// Convert the dates
-	    Date 	start 	= convertToUtcDateTime(StartDateTime.toInstant()), 
-	    		end 	= convertToUtcDateTime(EndDateTime.toInstant());
-	    
-	    String method = Status.toString();
-		
-	    SimpleDateFormat dateFormatStamp = new SimpleDateFormat("yyyyMMdd'T'HHmmss'Z'");
-	    SimpleDateFormat dateFormat = new SimpleDateFormat("yyyyMMdd'T'HHmmss");
 
-	    StringBuilder icalBuilder = new StringBuilder();
-	    icalBuilder.append("BEGIN:VCALENDAR\r\n");
-	    icalBuilder.append("VERSION:2.0\r\n");
-	    icalBuilder.append("CALSCALE:GREGORIAN\r\n");
-	    icalBuilder.append("METHOD:" + method + "\r\n");
-	    icalBuilder.append("PRODID:-//Mendix//iCal4j\r\n");
-	    
-	    icalBuilder.append("BEGIN:VEVENT\r\n");
-	    icalBuilder.append("UID:" + UID + "\r\n");
-	    icalBuilder.append("DTSTAMP:" + dateFormatStamp.format(new Date()) + "\r\n");
-	    icalBuilder.append("DTSTART;TZID=" + localTimeZoneCode + ":" + dateFormat.format(start) + "\r\n");
-	    icalBuilder.append("DTEND;TZID=" + localTimeZoneCode + ":" + dateFormat.format(end) + "\r\n");
-	    icalBuilder.append("SUMMARY:" + Subject + "\r\n");
-	    icalBuilder.append("SEQUENCE:" + Sequence + "\r\n");
-	    icalBuilder.append("ORGANIZER;CN=\"" + OrganizerName + "\":mailto:" + OrganizerEmail + "\r\n");
-	    
-	    AttendeeList.stream().forEach(obj -> {
-	    	try {
-	    		Attendee attendee = Attendee.initialize(getContext(), obj.getMendixObject());
-		    	icalBuilder.append("ATTENDEE;PARTSTAT=" + attendee.getStatus().getCaption()+ ";CN=\"" + attendee.getFullname() + "\";EMAIL=" + attendee.getEmail() + ":MAILTO:" + attendee.getEmail() + "\r\n");
-	    	} catch (Exception e) {
-	    		LOG.error("Could not parse the Attendees, you should not rename the entity Attendee or any of the attributes");
-	        }
-	    });
-	    
-	    if (Location != null) {
-	    	icalBuilder.append("LOCATION:" + Location + "\r\n");
-	    }
-	    if (BodyText != null) {
-	    	icalBuilder.append("DESCRIPTION:" + BodyText + "\n");
-	    }
-	    
-	    icalBuilder.append("END:VEVENT\r\n");
-	    icalBuilder.append("END:VCALENDAR");
-	  
-	    //Working Example
-	    //StringBuilder icalBuilder2 = new StringBuilder();
-	    //icalBuilder2.append("BEGIN:VCALENDAR\r\n"
-	    		//+ "VERSION:2.0\r\n"
-	    		//+ "CALSCALE:GREGORIAN\r\n"
-	    		//+ "METHOD:REQUEST\r\n"
-	    		//+ "BEGIN:VEVENT\r\n"
-	    		//+ "UID:8@<site>.com\r\n"
-	    		//+ "DTSTAMP:20230823T151651Z\r\n"
-	    		//+ "DTSTART;TZID=Europe/Amsterdam:" + dateFormat.format(start) + "\r\n"
-	    		//+ "DTEND;TZID=Europe/Amsterdam:" + dateFormat.format(end) + "\r\n"
-	    		//+ "SUMMARY:My Event8\r\n"
-	    		//+ "ORGANIZER;CN=\"HomeZero\":mailto:info@homezero.nl\r\n"
-	    		//+ "ATTENDEE;PARTSTAT=ACCEPTED;CN=\"Hunter Koppen\";EMAIL=hunter@homezero.nl:MAILTO:hunter@homezero.nl\r\n"
-	    		//+ "END:VEVENT\r\n"
-	    		//+ "END:VCALENDAR");
-	    
-		Charset charset = StandardCharsets.UTF_8;
-        byte[] byteArray = icalBuilder.toString().getBytes(charset);
+        String method = Status.toString();
+
+        StringBuilder icalBuilder = new StringBuilder();
+        appendLine(icalBuilder, "BEGIN:VCALENDAR");
+        appendLine(icalBuilder, "VERSION:2.0");
+        appendLine(icalBuilder, "CALSCALE:GREGORIAN");
+        appendLine(icalBuilder, "METHOD:" + method);
+        appendLine(icalBuilder, "PRODID:-//Mendix//iCal4j");
+
+        appendLine(icalBuilder, "BEGIN:VEVENT");
+        appendLine(icalBuilder, "UID:" + UID);
+        // DTSTAMP is the creation time of this iCal object — always a true moment, so always UTC.
+        appendLine(icalBuilder, "DTSTAMP:" + UTC_STAMP.format(Instant.now()));
+        appendLine(icalBuilder, dateProperty("DTSTART", StartDateTime.toInstant(), treatAsMoment, localTimeZoneCode));
+        appendLine(icalBuilder, dateProperty("DTEND",   EndDateTime.toInstant(),   treatAsMoment, localTimeZoneCode));
+        appendLine(icalBuilder, "SUMMARY:" + escapeText(Subject));
+        appendLine(icalBuilder, "SEQUENCE:" + Sequence);
+        appendLine(icalBuilder, "ORGANIZER;CN=\"" + escapeText(OrganizerName) + "\":mailto:" + OrganizerEmail);
+
+        for (Attendee attendee : AttendeeList) {
+            try {
+                String partstat = attendee.getStatus() != null
+                        ? attendee.getStatus().getCaption()
+                        : "NEEDS-ACTION";
+                String email = attendee.getEmail();
+                if (email == null) {
+                    LOG.warn("Skipping attendee without an email address");
+                    continue;
+                }
+                appendLine(icalBuilder,
+                        "ATTENDEE;PARTSTAT=" + partstat
+                        + ";CN=\"" + escapeText(attendee.getFullname()) + "\":mailto:" + email);
+            } catch (Exception e) {
+                LOG.error("Could not parse the Attendees, you should not rename the entity Attendee or any of the attributes", e);
+            }
+        }
+
+        if (Location != null) {
+            appendLine(icalBuilder, "LOCATION:" + escapeText(Location));
+        }
+        if (BodyText != null) {
+            appendLine(icalBuilder, "DESCRIPTION:" + escapeText(BodyText));
+        }
+
+        appendLine(icalBuilder, "END:VEVENT");
+        appendLine(icalBuilder, "END:VCALENDAR");
+
+        byte[] byteArray = icalBuilder.toString().getBytes(StandardCharsets.UTF_8);
         try (InputStream is = new ByteArrayInputStream(byteArray)) {
-            // Your code to store the InputStream content
             Core.storeFileDocumentContent(getContext(), this.__IcalFile, is);
             this.IcalFile.setName(getContext(), "event.ics");
         } catch (Exception e) {
-        	LOG.error(e);
+            LOG.error("Failed to store the iCal file content", e);
+            return false;
         }
-		return true;
+        return true;
 		// END USER CODE
 	}
 
@@ -191,29 +183,58 @@ public class JA_ICalFile extends CustomJavaAction<java.lang.Boolean>
 	}
 
 	// BEGIN EXTRA CODE
-    public static Date convertToUtcDateTime(Instant date) throws Exception {
-        // Remove the timezone data from the date so that it get parse properly we convert to a formatted String, Example: "2023-08-03T14:00:00Z"
-        DateTimeFormatter formatter = DateTimeFormatter.ISO_INSTANT;
-        String formattedString  = formatter.format(date);
-        //LOG.info("formattedString " + formattedString);
-        
-        // Parse it back to a date
-    	Date newDate = null;
-        if (formattedString.length() == 20) {
-            SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'");
-            newDate = sdf.parse(formattedString);
-        } else {
-            SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'");
-            newDate = sdf.parse(formattedString);
+    /**
+     * Formats a date-time content line.
+     * treatAsMoment = true  -> "<NAME>:<utc>Z"            (real instant, universal)
+     * treatAsMoment = false -> "<NAME>;TZID=<tzid>:<digits>" (wall-clock label, verbatim)
+     */
+    private static String dateProperty(String name, Instant instant, boolean treatAsMoment, String tzid) {
+        if (treatAsMoment) {
+            return name + ":" + UTC_STAMP.format(instant);
         }
-        return newDate;
+        return name + ";TZID=" + tzid + ":" + UTC_DIGITS.format(instant);
     }
-    
-    public static Date applyTimeZone(Date dateTime, String timeZoneId) {
-        Date tempDate = dateTime;
-		return tempDate;
+
+    /** Escapes a TEXT value per RFC 5545 §3.3.11. Backslash must be escaped first. */
+    private static String escapeText(String value) {
+        if (value == null) return "";
+        return value
+                .replace("\\", "\\\\")
+                .replace(";", "\\;")
+                .replace(",", "\\,")
+                .replace("\r\n", "\\n")
+                .replace("\n", "\\n")
+                .replace("\r", "\\n");
     }
-    
+
+    /** Folds a content line to <=75 octets per RFC 5545 §3.1, never splitting a multi-byte char. */
+    private static String fold(String line) {
+        if (line.getBytes(StandardCharsets.UTF_8).length <= 75) return line;
+        StringBuilder sb = new StringBuilder();
+        int count = 0;
+        for (int i = 0; i < line.length(); i++) {
+            char c = line.charAt(i);
+            int charBytes = String.valueOf(c).getBytes(StandardCharsets.UTF_8).length;
+            if (count + charBytes > 73) {
+                sb.append("\r\n ");
+                count = 1; // leading space counts toward the line length
+            }
+            sb.append(c);
+            count += charBytes;
+        }
+        return sb.toString();
+    }
+
+    /** Folds the line and terminates it with CRLF. */
+    private static void appendLine(StringBuilder sb, String line) {
+        sb.append(fold(line)).append("\r\n");
+    }
+
+    private static final DateTimeFormatter UTC_STAMP =
+            DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss'Z'").withZone(java.time.ZoneOffset.UTC);
+    private static final DateTimeFormatter UTC_DIGITS =
+            DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss").withZone(java.time.ZoneOffset.UTC);
+
     public static ILogNode LOG = Core.getLogger("iCalendar");
 	// END EXTRA CODE
 }
